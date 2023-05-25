@@ -15,10 +15,12 @@ import com.sxd.service.DishService;
 import jdk.nashorn.internal.ir.annotations.Ignore;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -36,11 +38,15 @@ public class DishController {
     @Autowired
     private CategoryService categoryService;
 
+    @Autowired
+    private RedisTemplate redisTemplate;
+
 
     @PostMapping
     public R<String> save(@RequestBody DishDto dishDto){
-
         dishService.saveWithFlavor(dishDto);
+        String key = "Dish_" + dishDto.getCategoryId() + "_1";
+        redisTemplate.delete(key);
 
         return R.success("新增菜品成功");
     }
@@ -110,6 +116,15 @@ public class DishController {
      */
     @GetMapping("/list")
     public R<List<DishDto>> list(Dish dish){
+        //动态生成key
+        String key = "Dish_" + dish.getCategoryId() + "_" + dish.getStatus();// Dish_1234123_1
+        //先查询redis中是否有数据,如果有直接返回数据
+        List<DishDto> dishDtos = (List<DishDto>) redisTemplate.opsForValue().get(key);
+
+        if(dishDtos != null){
+            return R.success(dishDtos);
+        }
+
         //构造查询条件
         LambdaQueryWrapper<Dish> lambdaQueryWrapper = new LambdaQueryWrapper<>();
         lambdaQueryWrapper.eq(dish.getCategoryId() != null, Dish::getCategoryId, dish.getCategoryId());
@@ -120,7 +135,7 @@ public class DishController {
 
         List<Dish> list = dishService.list(lambdaQueryWrapper);
 
-        List<DishDto> dishDtos =list.stream().map((item) -> {
+        dishDtos =list.stream().map((item) -> {
             //进行一个对象的复制
             DishDto dishDto = new DishDto();
             BeanUtils.copyProperties(item, dishDto);
@@ -132,7 +147,8 @@ public class DishController {
             dishDto.setFlavors(list1);
             return dishDto;
         }).collect(Collectors.toList());
-
+        //如果没有就查询数据库，再将数据存入redis中
+        redisTemplate.opsForValue().set(key, dishDtos, 60, TimeUnit.MINUTES);
 
         return R.success(dishDtos);
     }

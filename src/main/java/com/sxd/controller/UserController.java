@@ -11,6 +11,8 @@ import com.sxd.utils.ValidateCodeUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.el.lang.LambdaExpressionNestedState;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpSession;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/user")
@@ -26,6 +29,10 @@ import java.util.concurrent.ExecutionException;
 public class UserController {
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private RedisTemplate redisTemplate;
+
 
 
     @PostMapping("/sendMsg")
@@ -40,7 +47,10 @@ public class UserController {
             //发送验证码到手机
 //            MyAliyunUtils.sentMsg(phone, code);
             //将生成的验证码保存在Session中
-            session.setAttribute(phone, code);
+//            session.setAttribute(phone, code);
+            //将生成的验证码存入redis中
+
+            redisTemplate.opsForValue().set(phone, code, 5, TimeUnit.MINUTES);
 
             return R.success("手机验证码发送成功");
         }
@@ -56,8 +66,11 @@ public class UserController {
         //获取验证码
         String code = map.get("code").toString();
         //进行验证码的对比，从Session中拿出之前存入的code
-        String attribute = session.getAttribute(phone).toString();
-        if(code != null && attribute.equals(code)){
+//        String attribute = session.getAttribute(phone).toString();
+        //进行验证码对比，从redis中取出存入的code
+        String code1 = (String) redisTemplate.opsForValue().get(phone);
+
+        if(code != null && code1.equals(code)){
             //登录成功
             // 判断是否是第一次登录，如果是加入数据库 完成注册
             LambdaQueryWrapper<User> lambdaQueryWrapper = new LambdaQueryWrapper<>();
@@ -70,6 +83,7 @@ public class UserController {
                 userService.save(user);
             }
             session.setAttribute("user", user.getId());
+            redisTemplate.delete(phone);
             return R.success(user);
         }
 
