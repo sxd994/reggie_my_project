@@ -1,0 +1,15 @@
+package com.sxd.dto;
+
+
+import com.sxd.pojo.Setmeal;
+import com.sxd.pojo.SetmealDish;
+import lombok.Data;
+import java.util.List;
+
+@Data
+public class SetmealDto extends Setmeal {
+
+    private List<SetmealDish> setmealDishes;
+
+    private String categoryName;
+}
