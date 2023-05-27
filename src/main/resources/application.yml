@@ -7,6 +7,9 @@ spring:
     host: 39.105.133.72
     port: 6379
     password: sxd994
+  cache:
+    redis:
+      time-to-live: 1800000
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
